@@ -210,14 +210,19 @@ export const register: Register = on => {
       )
     }
 
-    const label = (
+    // Some plans (Enterprise, for one) never report usage windows. With a cache to show, the
+    // band is then the cache alone: no USAGE label and no "waiting" text that never resolves.
+    const hasUsage = list.length > 0
+    const label = hasUsage || !view ? (
       <Box key="label" flexShrink={0} marginRight={isWide ? 2 : 3}>
         <Text color={TEXT} bold>USAGE</Text>
       </Box>
-    )
-    const usage = list.length > 0
+    ) : null
+    const usage = hasUsage
       ? list.map(isWide ? wide : stacked)
-      : [<Box key="wait" flexShrink={0} marginRight={3}><Text color={MUTED}>waiting for the first reply</Text></Box>]
+      : view
+        ? []
+        : [<Box key="wait" flexShrink={0} marginRight={3}><Text color={MUTED}>waiting for the first reply</Text></Box>]
 
     // Before the first reply there is no cache to show: today's band, as it was.
     if (!view) {
@@ -235,9 +240,10 @@ export const register: Register = on => {
     const mine = mineModel(view)
     const stored = await read($, fold)
     // Folding needs the card, and the card is a drawing: the terminal stays folded.
-    const open = Svg !== null && (stored && stored.mode === mode ? stored.open : cold)
+    // The card starts folded in both modes: the next-message price is on the slim row.
+    const open = Svg !== null && (stored && stored.mode === mode ? stored.open : false)
     const toggle = () =>
-      update($, fold, f => ({ mode, open: !(f && f.mode === mode ? f.open : mode === 'cold') }))
+      update($, fold, f => ({ mode, open: !(f && f.mode === mode ? f.open : false) }))
 
     const badge = Svg
       ? [
@@ -256,7 +262,12 @@ export const register: Register = on => {
           mine ? <Text key="dot" color={MUTED}> · </Text> : null,
           mine ? <Text key="cost" color={TEXT} bold>{usd(costOf(mine, mode, view.tokens))}</Text> : null,
         ]
-      : [<Text key="left" color={hue} bold>{` ${Math.max(0, TTL_MIN - view.idleMin)}m left`}</Text>]
+      : [
+          <Text key="left" color={hue} bold>{` ${Math.max(0, TTL_MIN - view.idleMin)}m left`}</Text>,
+          mine ? <Text key="dot" color={MUTED}> · </Text> : null,
+          mine ? <Text key="cost" color={TEXT} bold>{usd(costOf(mine, mode, view.tokens))}</Text> : null,
+          mine ? <Text key="next" color={MUTED}> next</Text> : null,
+        ]
 
     const button = Svg ? (
       <Box key="fold" flexShrink={0} alignItems="flex-start">
