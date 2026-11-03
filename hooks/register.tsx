@@ -27,6 +27,7 @@ const TICK_MS = 30_000
 const windows = atom({ plugin: 'ribbon', key: 'windows' } as const, [] as Window[])
 const cache = atom({ plugin: 'ribbon', key: 'cache' } as const, null as CacheFacts | null)
 const fold = atom({ plugin: 'ribbon', key: 'fold' } as const, null as Fold | null)
+const spent = atom({ plugin: 'ribbon', key: 'spent' } as const, null as number | null)
 
 const NAMES: Record<string, string> = { seven_day: '7D', five_hour: '5H', spend_limit: 'SPEND' }
 const ORDER: Record<string, number> = { seven_day: 0, five_hour: 1 }
@@ -71,6 +72,7 @@ export const viewOf = (c: CacheFacts | null, now: number): CacheView | null => {
 const pull = async ($: EngineInterface): Promise<void> => {
   const u = await $.session.usage()
   await update($, windows, () => clean(u.rateLimits))
+  await update($, spent, () => u.cost?.usd ?? null)
 }
 
 /** Fresh context figures from the engine onto the cache facts, when it has them. */
@@ -96,6 +98,10 @@ export const register: Register = on => {
     if (e.changed.includes('rateLimits')) {
       await update($, windows, () => clean(e.rateLimits))
     }
+    if (e.changed.includes('cost') && e.cost) {
+      const usd = e.cost.usd
+      await update($, spent, () => usd)
+    }
     if (e.changed.includes('context') && e.context.tokens && e.context.tokens > 0) {
       const tokens = e.context.tokens
       await update($, cache, c => (c ? { ...c, tokens, window: e.context.window || c.window } : c))
@@ -113,6 +119,9 @@ export const register: Register = on => {
     if (e.reason === 'clear' || e.reason === 'resume') {
       await update($, cache, () => null)
       await update($, fold, () => null)
+      // /clear starts the session's ledger over; a resume brings its own total. Read it fresh.
+      const u = await $.session.usage()
+      await update($, spent, () => u.cost?.usd ?? null)
     }
     return r
   }).catch(($, e, next) => next(e)) // a band that fails to reset never holds up the session
@@ -148,8 +157,11 @@ export const register: Register = on => {
     const list = await read($, windows)
     const now = await $.clock.now()
     const view = viewOf(await read($, cache), now)
+    const total = await read($, spent)
+    // The session's running total, as the status line and /cost have it. Nothing until it's above zero.
+    const hasTotal = total !== null && total > 0
 
-    if (list.length === 0 && !view) {
+    if (list.length === 0 && !view && !hasTotal) {
       return (
         <Box backgroundColor={BG} paddingX={1}>
           <Text color={MUTED}>USAGE · waiting for the first reply</Text>
@@ -221,12 +233,26 @@ export const register: Register = on => {
         ? []
         : [<Box key="wait" flexShrink={0} marginRight={3}><Text color={MUTED}>waiting for the first reply</Text></Box>]
 
+    // "$1.23 total", worded like "$0.05 next" beside it. Stacked, it sits in a block of its own.
+    const spentInline = hasTotal ? (
+      <Box key="spent" flexDirection="row" flexShrink={0} marginRight={2}>
+        <Text color={TEXT} bold>{usd(total ?? 0)}</Text>
+        <Text color={MUTED}> total</Text>
+      </Box>
+    ) : null
+    const spentBlock = hasTotal ? (
+      <Box key="spent" flexDirection="column" flexShrink={0} marginRight={2}>
+        {spentInline}
+      </Box>
+    ) : null
+
     // Before the first reply there is no cache to show: today's band, as it was.
     if (!view) {
       return (
         <Box flexDirection="row" backgroundColor={BG} paddingX={1}>
           {label}
           {usage}
+          {kind === 'stacked' ? spentBlock : spentInline}
         </Box>
       )
     }
@@ -285,6 +311,7 @@ export const register: Register = on => {
               {summary}
             </Box>
           )}
+          {spentInline}
           {grow}
           {button}
         </Box>
@@ -307,6 +334,7 @@ export const register: Register = on => {
               ) : null}
             </Box>
           )}
+          {spentBlock}
           {grow}
           {button}
         </Box>
@@ -321,6 +349,8 @@ export const register: Register = on => {
         <Box key="cache" flexDirection="row" paddingX={1} alignItems="center">
           {badge}
           {summary}
+          {hasTotal ? <Text key="spent-gap">{'  '}</Text> : null}
+          {spentInline}
           {grow}
           {button}
         </Box>,

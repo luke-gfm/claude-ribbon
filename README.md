@@ -8,6 +8,7 @@ A free mod for Claude Code. It adds a slim band above your prompt that shows:
 
 - **How much usage you have left** in your 7-day and 5-hour windows, and when each one resets.
 - **Whether your prompt cache is warm or cold**, and what your next message will cost.
+- **What this session has cost** so far.
 
 It installs once and is there in every session after that. No commands to learn.
 
@@ -72,6 +73,10 @@ After your first reply, the band also tracks the prompt cache. The cache keeps y
 Click **Show** to open the cache card, and **Hide** to fold it. Warm starts folded. Cold starts open, so you see the price before you send.
 
 The card shows how long you've been idle, how many tokens are in the cache, and what the next message costs on each model. Your model is marked **YOU**. See [Up close](#up-close) below.
+
+### Session total
+
+**total** (as in `$1.23 total`) is what this session has cost so far, the same total as `/cost` and the status line. It appears once the session has cost anything, and starts over on `/clear`.
 
 ### Fits any width
 
