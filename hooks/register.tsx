@@ -103,22 +103,19 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // A resumed or forked session knows how long it was away and how big it is.
-  on('classic.SessionStart', async ($, e, next) => {
+  // A cleared session, or one resumed away from, leaves its cache behind: drop it until the next reply.
+  // Not classic.SessionStart: on Team and Enterprise seats the built-in cc-plugin-sec-default plugin
+  // sends every classic.* event (and session.compact) past user-installed plugins, so a hook there
+  // never runs. session.end is not on its list. A compaction needs no hook: session.measure brings
+  // the smaller context in on its own.
+  on('session.end', async ($, e, next) => {
     const r = await next(e)
-    if (e.source === 'clear' || e.source === 'compact') {
+    if (e.reason === 'clear' || e.reason === 'resume') {
       await update($, cache, () => null)
       await update($, fold, () => null)
-    } else if ((e.source === 'resume' || e.source === 'fork') && typeof e.seconds_since_last_response === 'number') {
-      const now = await $.clock.now()
-      const lastAt = now - e.seconds_since_last_response * 1000
-      const window = (await $.session.usage()).context.window
-      const model = typeof e.model === 'string' ? e.model : await $.session.model()
-      const tokens = typeof e.context_tokens === 'number' ? e.context_tokens : 0
-      await update($, cache, () => ({ lastAt, tokens, window, model }))
     }
     return r
-  }).catch(($, e, next) => next(e)) // a band that fails to seed never holds up the session
+  }).catch(($, e, next) => next(e)) // a band that fails to reset never holds up the session
 
   // Each main-thread request reads or writes the cache, so its start resets the hour.
   on('turn.step', async function* ($, e, next) {

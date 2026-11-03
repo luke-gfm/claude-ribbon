@@ -99,7 +99,7 @@ ribbon/
 │   ├── cache-art.ts        the cache card and robot drawings, the price table
 │   └── font.ts             Outfit, embedded so the drawings render anywhere
 ├── types/index.d.ts        the shape of what the band remembers
-├── tests/                  7 tests: layouts, warm and cold, terminal, cleared sessions
+├── tests/                  11 tests: layouts, warm and cold, terminal, cleared and resumed sessions
 └── assets/                 banner, screenshots, hex icon
 ```
 
